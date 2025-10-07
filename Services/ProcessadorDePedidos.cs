@@ -6,75 +6,100 @@ namespace ArtesaoDeSoftware.Services;
 
 public class ProcessadorDePedidos
 {
-    public void ProcessarPedido(Pedido p, ETipoDesconto tipoDesc, decimal val)
+    private const decimal DESCONTO_FIDELIDADE_ALTO = 0.10m;
+    private const decimal DESCONTO_FIDELIDADE_BAIXO = 0.05m;
+    private const decimal DESCONTO_PROMOCAO_NATAL = 0.20m;
+
+    public void ProcessarPedido(Pedido pedido, ETipoDesconto tipoDesconto, decimal valorDoDesconto)
     {
+        Console.WriteLine($"\nIniciando processamento do pedido {pedido.Id}...");
 
-        Console.WriteLine($"\nIniciando processamento do pedido {p.Id}...");
+        pedido.Status = "Processando";
 
-        p.Status = "Processando";
+        CalcularTotalBruto(pedido);
+        AplicarDesconto(pedido, tipoDesconto, valorDoDesconto);
+        SalvarPedido(pedido);
+        EnviarEmailDeConfirmacao(pedido);
 
-        decimal total = 0;
-        foreach (var i in p.Itens)
-        {
-            total += i.Produto.Preco * i.Quantidade;
-        }
-        p.Total = total;
-        Console.WriteLine($"Total dos itens: {p.Total:C}");
+        pedido.Status = "Concluído";
+        Console.WriteLine("Pedido processado com sucesso!");
+    }
 
-        decimal desc = 0;
-        if (tipoDesc == ETipoDesconto.CupomFixo)
-        {
-            desc = val;
-        }
-        else if (tipoDesc == ETipoDesconto.Porcentagem)
-        {
-            desc = p.Total * (val / 100);
-        }
-        else if (tipoDesc == ETipoDesconto.Fidelidade)
-        {
-
-            if (p.Cliente.AnosFidelidade > 5)
-            {
-                desc = p.Total * 0.10m; 
-            }
-            else
-            {
-                desc = p.Total * 0.05m; 
-            }
-        }
-        else if (tipoDesc == ETipoDesconto.PromocaoNatal)
-        {
-            desc = p.Total * 0.20m; 
-        }
-        p.Desconto = desc;
-        Console.WriteLine($"Desconto aplicado: {p.Desconto:C}");
-
-        p.TotalFinal = p.Total - p.Desconto;
-        Console.WriteLine($"Total final: {p.TotalFinal:C}");
-
-        Console.WriteLine("Salvando pedido em 'banco de dados'...");
-        InMemoryDatabase.Pedidos.Add(p);
-
+    private static void EnviarEmailDeConfirmacao(Pedido pedido)
+    {
         Console.WriteLine("Enviando e-mail de confirmação...");
         try
         {
-            var mail = new MailMessage("loja@email.com", p.Cliente.Email); 
-            mail.Subject = $"Pedido {p.Id} confirmado!";
-           
-            mail.Body = $"Olá {p.Cliente.Nome},\n\nSeu pedido de {p.TotalFinal:C} foi processado e será enviado em breve.\n\nObrigado por comprar conosco!";
+            var mail = new MailMessage("loja@email.com", pedido.Cliente.Email);
+            mail.Subject = $"Pedido {pedido.Id} confirmado!";
+
+            mail.Body = $"Olá {pedido.Cliente.Nome},\n\nSeu pedido de {pedido.TotalFinal:C} foi processado e será enviado em breve.\n\nObrigado por comprar conosco!";
 
             // Simulação de envio
             // var smtpClient = new SmtpClient("smtp.server.com");
             // smtpClient.Send(mail);
 
-            Console.WriteLine($"E-mail enviado para {p.Cliente.Email}");
+            Console.WriteLine($"E-mail enviado para {pedido.Cliente.Email}");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"ERRO: Falha ao enviar e-mail: {ex.Message}");
         }
+    }
 
-        p.Status = "Concluído";
-        Console.WriteLine("Pedido processado com sucesso!");
+    private static void SalvarPedido(Pedido pedido)
+    {
+        Console.WriteLine("Salvando pedido em 'banco de dados'...");
+        InMemoryDatabase.Pedidos.Add(pedido);
+    }
+
+    private static void AplicarDesconto(Pedido pedido, ETipoDesconto tipoDesconto, decimal valorDoDesconto)
+    {
+        
+        decimal valorDoDescontoCalculado = 0;
+
+        if (tipoDesconto == ETipoDesconto.CupomFixo)
+        {
+            valorDoDescontoCalculado = valorDoDesconto;
+        }
+        else if (tipoDesconto == ETipoDesconto.Porcentagem)
+        {
+            valorDoDescontoCalculado = pedido.Total * (valorDoDesconto / 100);
+        }
+        else if (tipoDesconto == ETipoDesconto.Fidelidade)
+        {
+
+            if (pedido.Cliente.AnosFidelidade > 5)
+            {
+                valorDoDescontoCalculado = pedido.Total * DESCONTO_FIDELIDADE_ALTO;
+            }
+            else
+            {
+                valorDoDescontoCalculado = pedido.Total * DESCONTO_FIDELIDADE_BAIXO;
+            }
+        }
+        else if (tipoDesconto == ETipoDesconto.PromocaoNatal)
+        {
+            valorDoDescontoCalculado = pedido.Total * DESCONTO_PROMOCAO_NATAL;
+        }
+
+        pedido.Desconto = valorDoDescontoCalculado;
+        Console.WriteLine($"Desconto aplicado: {pedido.Desconto:C}");
+
+        pedido.TotalFinal = pedido.Total - pedido.Desconto;
+        Console.WriteLine($"Total final: {pedido.TotalFinal:C}");
+    }
+
+    private static void CalcularTotalBruto(Pedido pedido)
+    {
+        decimal total = 0;
+
+        foreach (var item in pedido.Itens)
+        {
+            total += item.Produto.Preco * item.Quantidade;
+        }
+
+        pedido.Total = total;
+        Console.WriteLine($"Total dos itens: {pedido.Total:C}");
     }
 }
